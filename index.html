@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NANA View - Manual Leader</title>
+    <style>
+        :root {
+            --primary-color: #0056b3;
+            --accent-color: #ff4757;
+            --bg-color: #f0f2f5;
+            --text-color: #333;
+            --modal-bg: rgba(0, 0, 0, 0.6);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color);
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* ヘッダー */
+        header {
+            background: white; padding: 15px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10;
+        }
+        .app-name { font-weight: bold; font-size: 1.2rem; color: var(--primary-color); }
+        
+        /* 言語切替ボタン（絵文字使用） */
+        .lang-switch {
+            background: #f0f0f0; border: 1px solid #ddd; padding: 6px 12px; border-radius: 20px;
+            font-size: 0.95rem; cursor: pointer; display: flex; align-items: center;
+            transition: background 0.2s;
+        }
+        .lang-switch:active { background: #e0e0e0; }
+
+        /* メインエリア */
+        main { 
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            padding: 20px; position: relative;
+        }
+
+        /* 回答エリア */
+        #response-area {
+            width: 100%; max-width: 600px; height: 35vh; overflow-y: auto;
+            background: white; border-radius: 15px; padding: 20px; margin-bottom: 30px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: none;
+        }
+        .bubble { background: #eef2ff; padding: 15px; border-radius: 12px; line-height: 1.6; border-left: 5px solid var(--primary-color); }
+
+        /* マイクボタン（絵文字使用） */
+        .mic-container { position: relative; }
+        #mic-btn {
+            width: 120px; height: 120px; border-radius: 50%;
+            background: linear-gradient(145deg, #0063cc, #0056b3);
+            border: none; color: white; font-size: 4rem; /* 絵文字サイズ */
+            box-shadow: 0 10px 20px rgba(0, 86, 179, 0.3);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: transform 0.1s;
+        }
+        #mic-btn:active { transform: scale(0.95); }
+        #mic-btn.listening { animation: pulse 1.5s infinite; background: var(--accent-color); }
+        
+        @keyframes pulse { 
+            0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); } 
+            70% { box-shadow: 0 0 0 20px rgba(0,0,0,0); } 
+            100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } 
+        }
+
+        #status-text { margin-top: 20px; font-size: 1.1rem; color: #666; font-weight: bold; min-height: 1.5rem; }
+
+        /* フッター（モード選択） */
+        footer { background: white; padding: 15px 10px; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 10; }
+        .mode-selector { display: flex; justify-content: space-around; max-width: 600px; margin: 0 auto; gap: 10px; }
+        .mode-btn { 
+            background: none; border: 2px solid #ddd; border-radius: 25px; 
+            padding: 10px 0; font-size: 0.85rem; color: #666; width: 32%; 
+            font-weight: bold; cursor: pointer; transition: all 0.2s;
+        }
+        .mode-btn.active { border-color: var(--primary-color); background: var(--primary-color); color: white; }
+        /* トラブルモードだけ赤くする */
+        .mode-btn[data-mode="trouble"].active { border-color: var(--accent-color); background: var(--accent-color); }
+
+        /* --- 言語選択モーダル --- */
+        #lang-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--modal-bg); z-index: 2000;
+            justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        #lang-modal.show { display: flex; opacity: 1; }
+        
+        .lang-list-container {
+            background: white; width: 90%; max-width: 350px; max-height: 80vh;
+            border-radius: 15px; overflow: hidden; display: flex; flex-direction: column;
+        }
+        .lang-header {
+            padding: 15px; background: #f8f9fa; border-bottom: 1px solid #eee;
+            font-weight: bold; text-align: center; font-size: 1.1rem;
+        }
+        .lang-list { overflow-y: auto; }
+        .lang-item {
+            padding: 15px 20px; border-bottom: 1px solid #eee; font-size: 1rem;
+            cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        }
+        .lang-item:active { background: #eef2ff; }
+        .lang-check { color: var(--primary-color); font-weight: bold; display: none; }
+        .lang-item.selected .lang-check { display: block; }
+        
+        .modal-close-area { flex:1; } /* モーダル外クリック用 */
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="app-name">NANA View</div>
+        <button class="lang-switch" onclick="openLangModal()">
+            <span style="font-size:1.2rem; margin-right:5px;">🌐</span>
+            <span id="header-lang-name">日本語</span>
+        </button>
+    </header>
+
+    <main>
+        <div id="response-area"><div id="ai-response" class="bubble"></div></div>
+        
+        <div class="mic-container">
+            <button id="mic-btn">🎙️</button>
+        </div>
+        <div id="status-text" data-key="tap_to_speak">タップして話す</div>
+    </main>
+
+    <footer>
+        <div class="mode-selector">
+            <button class="mode-btn active" onclick="setMode('beginner', this)" data-key="mode_beginner">🔰 初心者</button>
+            <button class="mode-btn" onclick="setMode('pro', this)" data-key="mode_pro">⚡ プロ</button>
+            <button class="mode-btn" onclick="setMode('trouble', this)" data-key="mode_trouble" data-mode="trouble">🚨 トラブル</button>
+        </div>
+    </footer>
+
+    <div id="lang-modal">
+        <div class="modal-close-area" onclick="closeLangModal()"></div>
+        <div class="lang-list-container">
+            <div class="lang-header">Select Language</div>
+            <div class="lang-list" id="lang-list-body">
+                </div>
+        </div>
+        <div class="modal-close-area" onclick="closeLangModal()"></div>
+    </div>
+
+    <script>
+        // --- 多言語辞書データ (10ヶ国語対応) ---
+        const dictionary = {
+            ja: { name: "日本語", tap_to_speak: "タップして話す", listening: "聞いています...", mode_beginner: "🔰 初心者", mode_pro: "⚡ プロ", mode_trouble: "🚨 トラブル", ai_demo: "【デモ】<br>これは日本語の画面です。<br>コンセントを抜いて再起動してください。" },
+            en: { name: "English", tap_to_speak: "Tap to speak", listening: "Listening...", mode_beginner: "🔰 Beginner", mode_pro: "⚡ Pro", mode_trouble: "🚨 Trouble", ai_demo: "【Demo】<br>This is the English screen.<br>Please unplug and restart." },
+            vi: { name: "Tiếng Việt", tap_to_speak: "Chạm để nói", listening: "Đang nghe...", mode_beginner: "🔰 Người mới", mode_pro: "⚡ Chuyên gia", mode_trouble: "🚨 Sự cố", ai_demo: "【Demo】<br>Đây là màn hình Tiếng Việt.<br>Vui lòng rút phích cắm và khởi động lại." },
+            ne: { name: "नेपाली", tap_to_speak: "बोल्न ट्याप गर्नुहोस्", listening: "सुन्दै...", mode_beginner: "🔰 शुरुवात", mode_pro: "⚡ प्रो", mode_trouble: "🚨 समस्या", ai_demo: "【Demo】<br>यो नेपाली स्क्रिन हो。<br>कृपया अनप्लग गर्नुहोस् र पुनःart गर्नुहोस्。" },
+            my: { name: "မြန်မာ", tap_to_speak: "ပြောရန် နှိပ်ပါ", listening: "နားထောင်နေသည်...", mode_beginner: "🔰 အစပြုသူ", mode_pro: "⚡ ကျွမ်းကျင်", mode_trouble: "🚨 ပြဿနာ", ai_demo: "【Demo】<br>ဒါက မြန်မာမျက်နှာပြင်ပါ။" },
+            zh: { name: "中文", tap_to_speak: "点击说话", listening: "正在听...", mode_beginner: "🔰 初学者", mode_pro: "⚡ 专业", mode_trouble: "🚨 故障", ai_demo: "【演示】<br>这是中文界面。<br>请拔掉电源并重启。" },
+            id: { name: "Indonesia", tap_to_speak: "Ketuk untuk bicara", listening: "Mendengarkan...", mode_beginner: "🔰 Pemula", mode_pro: "⚡ Ahli", mode_trouble: "🚨 Masalah", ai_demo: "【Demo】<br>Ini layar bahasa Indonesia." },
+            tl: { name: "Tagalog", tap_to_speak: "I-tap para magsalita", listening: "Nakikinig...", mode_beginner: "🔰 Baguhan", mode_pro: "⚡ Pro", mode_trouble: "🚨 Problema", ai_demo: "【Demo】<br>Ito ang screen ng Tagalog." },
+            ko: { name: "한국어", tap_to_speak: "탭하여 말하기", listening: "듣고 있어요...", mode_beginner: "🔰 초보자", mode_pro: "⚡ 프로", mode_trouble: "🚨 트러블", ai_demo: "【데모】<br>한국어 화면입니다." },
+            pt: { name: "Português", tap_to_speak: "Toque para falar", listening: "Ouvindo...", mode_beginner: "🔰 Iniciante", mode_pro: "⚡ Pro", mode_trouble: "🚨 Problema", ai_demo: "【Demo】<br>Esta é a tela em Português." }
+        };
+
+        let currentLang = 'ja';
+        let currentMode = 'beginner';
+
+        // --- 初期化 ---
+        window.onload = function() {
+            // 1. 言語リストを生成
+            const listBody = document.getElementById('lang-list-body');
+            Object.keys(dictionary).forEach(key => {
+                const item = document.createElement('div');
+                item.className = 'lang-item';
+                item.id = `lang-item-${key}`;
+                item.onclick = () => selectLang(key);
+                item.innerHTML = `
+                    <span style="font-weight:bold;">${dictionary[key].name}</span>
+                    <span class="lang-check">✔</span>
+                `;
+                listBody.appendChild(item);
+            });
+
+            // 2. 言語設定の読み込み（保存値 > ブラウザ設定 > デフォルト）
+            const savedLang = localStorage.getItem('nana_app_lang');
+            if (savedLang && dictionary[savedLang]) {
+                currentLang = savedLang;
+            } else {
+                // ブラウザの言語設定を確認
+                const browserLang = (navigator.language || navigator.userLanguage).slice(0, 2);
+                if (dictionary[browserLang]) {
+                    currentLang = browserLang;
+                }
+            }
+
+            applyLanguage(currentLang);
+        };
+
+        // --- 言語選択モーダル制御 ---
+        function openLangModal() {
+            const modal = document.getElementById('lang-modal');
+            modal.classList.add('show');
+            
+            // 現在の言語を選択状態にする
+            document.querySelectorAll('.lang-item').forEach(el => el.classList.remove('selected'));
+            document.getElementById(`lang-item-${currentLang}`).classList.add('selected');
+        }
+
+        function closeLangModal() {
+            document.getElementById('lang-modal').classList.remove('show');
+        }
+
+        function selectLang(langKey) {
+            currentLang = langKey;
+            localStorage.setItem('nana_app_lang', currentLang); // 保存
+            applyLanguage(currentLang);
+            closeLangModal();
+        }
+
+        function applyLanguage(lang) {
+            const data = dictionary[lang];
+            
+            // ヘッダー表示更新
+            document.getElementById('header-lang-name').innerText = data.name;
+
+            // 各テキストの更新 (data-key属性を持つもの)
+            document.querySelectorAll('[data-key]').forEach(el => {
+                const key = el.getAttribute('data-key');
+                if (data[key]) el.innerText = data[key];
+            });
+
+            // マイク待機中のテキスト更新
+            if (!micBtn.classList.contains('listening')) {
+                document.getElementById('status-text').innerText = data.tap_to_speak;
+            }
+        }
+
+        // --- マイクボタン & モード選択（前回同様） ---
+        const micBtn = document.getElementById('mic-btn');
+        const statusText = document.getElementById('status-text');
+        const responseArea = document.getElementById('response-area');
+        const aiResponse = document.getElementById('ai-response');
+
+        function setMode(mode, btn) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (micBtn.classList.contains('listening')) return;
+            micBtn.classList.add('listening');
+            
+            statusText.innerText = dictionary[currentLang].listening;
+            responseArea.style.display = 'none';
+
+            // 疑似AI応答（1.5秒後）
+            setTimeout(() => {
+                micBtn.classList.remove('listening');
+                statusText.innerText = dictionary[currentLang].tap_to_speak;
+                responseArea.style.display = 'block';
+                aiResponse.innerHTML = dictionary[currentLang].ai_demo;
+            }, 1500);
+        });
+
+    </script>
+</body>
+</html>
